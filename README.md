@@ -1,4 +1,4 @@
-#License Plate Detector for Android
+# License Plate Detector for Android
 
 This project is a fork of [sd-toolkit/android-anpr-reader](https://github.com/sd-toolkit/android-anpr-reader).
 
