@@ -7,17 +7,20 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.net.Uri;
+import android.os.Environment;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.opencsv.CSVReader;
 import com.sdtoolkit.anpr.api.AnprEngineFactory;
 import com.sdtoolkit.anpr.api.AnprErrors;
 import com.sdtoolkit.anpr.api.AnprResult;
@@ -27,7 +30,13 @@ import com.sdtoolkit.anpr.api.IAnprEngineListener;
 import com.sdtoolkit.anpr.api.RecognitionParams;
 import com.sdtoolkit.anpr.view.CameraView;
 
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
+
+import static android.os.Environment.DIRECTORY_DOCUMENTS;
 
 public class MainActivity extends AppCompatActivity {
     private final int REQUEST_ALL_PERMISSIONS = 0x4562;
@@ -44,6 +53,9 @@ public class MainActivity extends AppCompatActivity {
     private IAnprEngine mAnprEngine;
     private DeviceParams mDeviceParams = new DeviceParams();
     private RecognitionParams mRecognitionParams = new RecognitionParams();
+
+    private List policePlates = new ArrayList();
+    private AlertDialog.Builder alertDialogBuilder;
 
     private IAnprEngineListener mAnprEngineListener = new IAnprEngineListener() {
         @Override
@@ -168,6 +180,22 @@ public class MainActivity extends AppCompatActivity {
 
         mAnprEngine.open(mAnprEngineListener, runIntent);
 
+        try{
+            File csvFile = new File(Environment.getExternalStoragePublicDirectory(DIRECTORY_DOCUMENTS) + "/radars.csv");
+            CSVReader reader = new CSVReader(new FileReader(csvFile.getAbsolutePath()));
+            String[] nextLine;
+            while ((nextLine = reader.readNext()) != null) {
+                policePlates.add(nextLine[0]);
+            }
+        }
+        catch(IOException e){
+            String toastMsg = "The specified file was not found, " + Environment.getDataDirectory();
+            e.printStackTrace();
+            Toast.makeText(this, toastMsg, Toast.LENGTH_SHORT).show();
+        }
+
+        alertDialogBuilder = new AlertDialog.Builder(this);
+
     }
 
     @Override
@@ -270,11 +298,37 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void run() {
                 for (AnprResult result : results) {
-                    if (mSwitchShowLowConfidence == null || mSwitchShowLowConfidence.isChecked()) {
+                    if (mSwitchShowLowConfidence == null || !mSwitchShowLowConfidence.isChecked()) {
                         // Insert in front
+
                         String newResults = String.format("%s [%s] (%.3f)\r\n",
                                 result.getPlate(), result.getCountry(), result.getConfidence());
-                        mTextResults.setText(newResults + mTextResults.getText());
+                        if(result.getConfidence() >= 0.8)
+                        {
+                            mTextResults.setText(newResults);
+                        }
+                        for(Object plaque : policePlates){
+
+                            if(result.getPlate().equals(plaque)){
+                                mTextResults.setText("!!! " + result.getPlate() + " !!!");
+                                alertDialogBuilder.setMessage("VOITURE RADAR DETECTEE: " + result.getPlate());
+                                AlertDialog alertDialog = alertDialogBuilder.create();
+                                alertDialog.show();
+                            }
+                        }
+                    }
+                    else if(mSwitchShowLowConfidence == null || mSwitchShowLowConfidence.isChecked()){
+                        String newResults = String.format("%s [%s] (%.3f)\r\n",
+                                result.getPlate(), result.getCountry(), result.getConfidence());
+                        mTextResults.setText(newResults);
+                        for(Object plaque : policePlates){
+                            if(result.getPlate().equals(plaque)){
+                                mTextResults.setText("!!! " + result.getPlate() + " !!!");
+                                alertDialogBuilder.setMessage("VOITURE RADAR DETECTEE: " + result.getPlate());
+                                AlertDialog alertDialog = alertDialogBuilder.create();
+                                alertDialog.show();
+                            }
+                        }
                     }
                 }
             }
